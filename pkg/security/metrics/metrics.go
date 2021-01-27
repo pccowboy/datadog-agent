@@ -46,6 +46,15 @@ var (
 	// Tags: -
 	MetricConcurrentSyscall = newRuntimeMetric(".concurrent_syscalls")
 
+	// Dentry Resolver metrics
+
+	// MetricDentryResolverHits is the counter of successful dentry resolution
+	// Tags: cache, kernel_maps
+	MetricDentryResolverHits = newRuntimeMetric(".dentry_resolver.hits")
+	// MetricDentryResolverMiss is the counter of unsuccessful dentry resolution
+	// Tags: cache, kernel_maps
+	MetricDentryResolverMiss = newRuntimeMetric(".dentry_resolver.miss")
+
 	// Perf buffer metrics
 
 	// MetricPerfBufferLostWrite is the name of the metric used to count the number of lost events, as reported by a
@@ -116,6 +125,13 @@ var (
 	MetricsSecurityAgentRuntimeRunning = newAgentMetric(".runtime.running")
 	// MetricsSecurityAgentFIMRunning is reported when the security agent `FIM` feature is enabled
 	MetricsSecurityAgentFIMRunning = newAgentMetric(".fim.running")
+
+	// CacheTag is assigned to metrics related to userspace cache
+	CacheTag = []string{"type:cache"}
+	// KernelMapsTag is assigned to metrics related to eBPF kernel maps
+	KernelMapsTag = []string{"type:kernel_maps"}
+	// ProcFSTag is assigned to metrics related to /proc fallbacks
+	ProcFSTag = []string{"type:procfs"}
 )
 
 func newRuntimeMetric(name string) string {

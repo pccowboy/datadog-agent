@@ -135,8 +135,6 @@ func (p *Probe) Init(client *statsd.Client) error {
 		defer bytecodeReader.Close()
 	}
 
-	p.manager = ebpf.NewRuntimeSecurityManager()
-
 	var ok bool
 	if p.perfMap, ok = p.manager.GetPerfMap("events"); !ok {
 		return errors.New("couldn't find events perf map")
@@ -738,6 +736,7 @@ func NewProbe(config *config.Config, client *statsd.Client) (*Probe, error) {
 	p := &Probe{
 		config:         config,
 		approvers:      make(map[eval.EventType]activeApprovers),
+		manager:        ebpf.NewRuntimeSecurityManager(),
 		managerOptions: ebpf.NewDefaultOptions(),
 		ctx:            ctx,
 		cancelFnc:      cancel,
