@@ -1,9 +1,9 @@
 ---
 include:
   # - /.gitlab/maintenance_jobs.yml
-  # - /.gitlab/deps_build.yml
-  # - /.gitlab/deps_fetch.yml
-  # - /.gitlab/source_test.yml
+  - /.gitlab/deps_build.yml
+  - /.gitlab/deps_fetch.yml
+  - /.gitlab/source_test.yml
   # - /.gitlab/binary_build.yml
   # - /.gitlab/integration_test.yml
   # - /.gitlab/package_build.yml
@@ -48,9 +48,9 @@ workflow:
 
 stages:
   - test
-  # - deps_build
-  # - deps_fetch
-  # - source_test
+  - deps_build
+  - deps_fetch
+  - source_test
   # - binary_build
   # - integration_test
   # - package_build
