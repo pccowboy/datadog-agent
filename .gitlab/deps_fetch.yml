@@ -7,6 +7,7 @@
   stage: deps_fetch
   needs: []
   script:
+    - python3 -m pip install codeowners
     - inv -e deps --verbose
     - cd $GOPATH/pkg/mod/ && tar czf $CI_PROJECT_DIR/modcache.tar.gz .
   artifacts:
