@@ -98,7 +98,9 @@ class Gitlab(object):
         return self.make_request(path, json=True)
 
     def artifact(self, project_name, job_id):
-        path = "/projects/{}/jobs/{}/artifacts/test_output.json".format(project_name, job_id)
+        from urllib.parse import quote
+
+        path = "/projects/{}/jobs/{}/artifacts/test_output.json".format(quote(project_name, safe=""), job_id)
         return self.make_request(path)
 
     def all_jobs(self, project_name, pipeline_id):

@@ -76,6 +76,7 @@ def get_failed_tests(project_name, job):
     for line in test_output:
         try:
             json_test = json.loads(line)
+            print(json_test)
             if 'Test' in json_test and json_test["Action"] == "fail":
                 yield Test(OWNERS, json_test['Test'], json_test['Package'])
         except Exception as e:
