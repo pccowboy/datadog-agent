@@ -147,7 +147,6 @@ class Gitlab(object):
         import requests
 
         url = self.BASE_URL + path
-
         headers = dict(headers or [])
         headers["PRIVATE-TOKEN"] = self.api_token
         try:

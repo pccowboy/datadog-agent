@@ -71,16 +71,20 @@ def get_failed_tests(project_name, job):
     OWNERS = CodeOwners(codeowners)
 
     test_output = gitlab.artifact(project_name, job["id"])
-    print(test_output)
-
     for line in test_output:
         try:
             json_test = json.loads(line)
-            print(json_test)
-            if 'Test' in json_test and json_test["Action"] == "fail":
+            if "message" in json_test:
+                continue
+            if (
+                'Test' in json_test
+                and 'Package' in json_test
+                and 'Action' in json_test
+                and json_test["Action"] == "fail"
+            ):
                 yield Test(OWNERS, json_test['Test'], json_test['Package'])
         except Exception as e:
-            print("WARN: parsing failed", e)
+            print("WARN: parsing", line, "failed", e)
 
 
 def prepare_global_failure_message(header, failed_jobs):
