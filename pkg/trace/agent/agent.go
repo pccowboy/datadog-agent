@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"sync/atomic"
 	"time"
+	"fmt"
 
 	"github.com/DataDog/datadog-agent/pkg/trace/api"
 	"github.com/DataDog/datadog-agent/pkg/trace/config"
@@ -89,34 +90,68 @@ func NewAgent(ctx context.Context, conf *config.AgentConfig) *Agent {
 	return agnt
 }
 
+func NewInProcessAgent(ctx context.Context, conf *config.AgentConfig) *Agent {
+	dynConf := sampler.NewDynamicConfig(conf.DefaultEnv)
+	in := make(chan *api.Payload, 1000)
+	statsChan := make(chan []stats.Bucket, 100)
+
+	agnt := &Agent{
+		Concentrator:       stats.NewConcentrator(conf.BucketInterval.Nanoseconds(), statsChan),
+		Blacklister:        filters.NewBlacklister(conf.Ignore["resource"]),
+		Replacer:           filters.NewReplacer(conf.ReplaceTags),
+		ScoreSampler:       NewScoreSampler(conf),
+		ExceptionSampler:   sampler.NewExceptionSampler(),
+		ErrorsScoreSampler: NewErrorsSampler(conf),
+		PrioritySampler:    NewPrioritySampler(conf, dynConf),
+		EventProcessor:     newEventProcessor(conf),
+		TraceWriter:        writer.NewTraceWriter(conf),
+		StatsWriter:        writer.NewStatsWriter(conf, statsChan),
+		obfuscator:         obfuscate.NewObfuscator(conf.Obfuscation),
+		In:                 in,
+		conf:               conf,
+		ctx:                ctx,
+	}
+
+	return agnt
+}
+
 // Run starts routers routines and individual pieces then stop them when the exit order is received
 func (a *Agent) Run() {
+	fmt.Println("Starting starters")
+
 	for _, starter := range []interface{ Start() }{
-		a.Receiver,
+		// a.Receiver,
 		a.Concentrator,
 		a.ScoreSampler,
 		a.ErrorsScoreSampler,
 		a.PrioritySampler,
 		a.EventProcessor,
 	} {
-		starter.Start()
+		if (starter != nil) {
+			starter.Start()
+		}
 	}
 
+	fmt.Println("Starting writers")
 	go a.TraceWriter.Run()
 	go a.StatsWriter.Run()
 
+	fmt.Println("Starting workers")
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go a.work()
 	}
 
+	fmt.Println("Entering loop")
 	a.loop()
 }
 
 func (a *Agent) work() {
 	sublayerCalculator := stats.NewSublayerCalculator()
+
 	for {
 		select {
 		case p, ok := <-a.In:
+			fmt.Println("Message received")
 			if !ok {
 				return
 			}
@@ -124,13 +159,17 @@ func (a *Agent) work() {
 		}
 	}
 
+	fmt.Println("Worker exiting")
 }
 
 func (a *Agent) loop() {
+	fmt.Println("Starting loop")
+
 	for {
 		select {
 		case <-a.ctx.Done():
 			log.Info("Exiting...")
+			fmt.Println("Exiting")
 			if err := a.Receiver.Stop(); err != nil {
 				log.Error(err)
 			}
@@ -146,11 +185,15 @@ func (a *Agent) loop() {
 			return
 		}
 	}
+
+	fmt.Println("Exiting loop")
 }
 
 // Process is the default work unit that receives a trace, transforms it and
 // passes it downstream.
 func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalculator) {
+	fmt.Println("Processing payload")
+
 	if len(p.Traces) == 0 {
 		log.Debugf("Skipping received empty payload")
 		return
@@ -159,6 +202,9 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 	ts := p.Source
 	ss := new(writer.SampledSpans)
 	sinputs := make([]stats.Input, 0, len(p.Traces))
+
+	fmt.Println("Foreach traces")
+
 	for _, t := range p.Traces {
 		if len(t) == 0 {
 			log.Debugf("Skipping received empty trace")
@@ -166,6 +212,10 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 		}
 
 		tracen := int64(len(t))
+
+		fmt.Println("Trace length")
+		fmt.Println(tracen)
+
 		atomic.AddInt64(&ts.SpansReceived, tracen)
 		err := normalizeTrace(p.Source, t)
 		if err != nil {
@@ -192,17 +242,22 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 				traceutil.UpdateTracerTopLevel(span)
 			}
 		}
+
+		fmt.Println("Replacer")
 		a.Replacer.Replace(t)
 
 		{
 			// this section sets up any necessary tags on the root:
 			clientSampleRate := sampler.GetGlobalRate(root)
+
 			sampler.SetClientRate(root, clientSampleRate)
 
-			if ratelimiter := a.Receiver.RateLimiter; ratelimiter.Active() {
+			/*if ratelimiter := a.Receiver.RateLimiter; ratelimiter.Active() {
+				fmt.Println("Ratelimiter")
 				rate := ratelimiter.RealRate()
 				sampler.SetPreSampleRate(root, rate)
-			}
+			}*/
+
 			if p.ContainerTags != "" {
 				traceutil.SetMeta(root, tagContainersTags, p.ContainerTags)
 			}
@@ -218,6 +273,9 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 			// this trace has a user defined env.
 			env = v
 		}
+
+		fmt.Println("Env is ", env)
+
 		pt := ProcessedTrace{
 			Trace:         t,
 			WeightedTrace: stats.NewWeightedTrace(t, root),
@@ -247,6 +305,7 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 			SublayersOnly: p.ClientComputedStats,
 		})
 		if keep {
+			fmt.Println("keep")
 			ss.Traces = append(ss.Traces, traceutil.APITrace(t))
 			ss.Size += t.Msgsize()
 			ss.SpanCount += int64(len(t))
@@ -256,11 +315,15 @@ func (a *Agent) Process(p *api.Payload, sublayerCalculator *stats.SublayerCalcul
 			ss.Size += pb.Trace(events).Msgsize()
 		}
 		if ss.Size > writer.MaxPayloadSize {
+			fmt.Println("Writing")
 			a.TraceWriter.In <- ss
 			ss = new(writer.SampledSpans)
 		}
+
+		fmt.Println("done")
 	}
 	if ss.Size > 0 {
+		fmt.Println("Sending the trace to the writer")
 		a.TraceWriter.In <- ss
 	}
 	if len(sinputs) > 0 {

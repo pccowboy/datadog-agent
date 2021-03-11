@@ -7,8 +7,8 @@ package writer
 
 import (
 	"compress/gzip"
+	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -112,31 +112,39 @@ func (w *TraceWriter) Stop() {
 
 // Run starts the TraceWriter.
 func (w *TraceWriter) Run() {
+	fmt.Println("TraceWriter.Run. Duration: %d", w.tick)
 	t := time.NewTicker(w.tick)
 	defer t.Stop()
 	defer close(w.stop)
 	for {
 		select {
 		case pkg := <-w.In:
+			fmt.Println("Reading trace")
 			w.addSpans(pkg)
 		case <-w.stop:
+			fmt.Println("Stop writer")
 			// drain the input channel before stopping
 		outer:
 			for {
 				select {
 				case pkg := <-w.In:
+					fmt.Println("Reading trace")
 					w.addSpans(pkg)
 				default:
 					break outer
 				}
 			}
 			w.flush()
+			fmt.Println("Return from writer")
 			return
 		case <-t.C:
+			fmt.Println("Tick")
 			w.report()
 			w.flush()
 		}
 	}
+
+	fmt.Println("Exit writer")
 }
 
 func (w *TraceWriter) addSpans(pkg *SampledSpans) {
@@ -144,20 +152,23 @@ func (w *TraceWriter) addSpans(pkg *SampledSpans) {
 	atomic.AddInt64(&w.stats.Traces, int64(len(pkg.Traces)))
 	atomic.AddInt64(&w.stats.Events, int64(len(pkg.Events)))
 
+	fmt.Println("Updated stats")
 	size := pkg.Size
 	if size+w.bufferedSize > MaxPayloadSize {
 		// reached maximum allowed buffered size
 		w.flush()
 	}
 	if len(pkg.Traces) > 0 {
-		log.Tracef("Handling new trace with %d spans: %v", pkg.SpanCount, pkg.Traces)
+		fmt.Println("Handling new trace with %d spans: %v", pkg.SpanCount, pkg.Traces)
 		w.traces = append(w.traces, pkg.Traces...)
 	}
 	if len(pkg.Events) > 0 {
-		log.Tracef("Handling new package with %d events: %v", len(pkg.Events), pkg.Events)
+		fmt.Println("Handling new package with %d events: %v", len(pkg.Events), pkg.Events)
 		w.events = append(w.events, pkg.Events...)
 	}
 	w.bufferedSize += size
+
+	fmt.Println("Span added")
 }
 
 func (w *TraceWriter) resetBuffer() {
@@ -169,15 +180,20 @@ func (w *TraceWriter) resetBuffer() {
 const headerLanguages = "X-Datadog-Reported-Languages"
 
 func (w *TraceWriter) flush() {
+	fmt.Println("Flush")
+
 	if len(w.traces) == 0 && len(w.events) == 0 {
 		// nothing to do
+		fmt.Println("Nothing to do")
 		return
 	}
+
+	fmt.Println("Flushing traces")
 
 	defer timing.Since("datadog.trace_agent.trace_writer.encode_ms", time.Now())
 	defer w.resetBuffer()
 
-	log.Debugf("Serializing %d traces and %d APM events.", len(w.traces), len(w.events))
+	fmt.Println("Serializing %d traces and %d APM events.", len(w.traces), len(w.events))
 	tracePayload := pb.TracePayload{
 		HostName:     w.hostname,
 		Env:          w.env,
@@ -186,7 +202,7 @@ func (w *TraceWriter) flush() {
 	}
 	b, err := proto.Marshal(&tracePayload)
 	if err != nil {
-		log.Errorf("Failed to serialize payload, data dropped: %v", err)
+		fmt.Println("Failed to serialize payload, data dropped: %v", err)
 		return
 	}
 
@@ -200,20 +216,21 @@ func (w *TraceWriter) flush() {
 		p := newPayload(map[string]string{
 			"Content-Type":     "application/x-protobuf",
 			"Content-Encoding": "gzip",
-			headerLanguages:    strings.Join(info.Languages(), "|"),
+			// headerLanguages:    strings.Join(info.Languages(), "|"),
+			headerLanguages: "dotnet",
 		})
 		gzipw, err := gzip.NewWriterLevel(p.body, gzip.BestSpeed)
 		if err != nil {
 			// it will never happen, unless an invalid compression is chosen;
 			// we know gzip.BestSpeed is valid.
-			log.Errorf("gzip.NewWriterLevel: %d", err)
+			fmt.Println("gzip.NewWriterLevel: %d", err)
 			return
 		}
 		if _, err := gzipw.Write(b); err != nil {
-			log.Errorf("Error gzipping trace payload: %v", err)
+			fmt.Println("Error gzipping trace payload: %v", err)
 		}
 		if err := gzipw.Close(); err != nil {
-			log.Errorf("Error closing gzip stream when writing trace payload: %v", err)
+			fmt.Println("Error closing gzip stream when writing trace payload: %v", err)
 		}
 
 		sendPayloads(w.senders, p)

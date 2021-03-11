@@ -21,10 +21,8 @@ import (
 	"time"
 
 	"github.com/DataDog/datadog-agent/pkg/trace/config"
-	"github.com/DataDog/datadog-agent/pkg/trace/info"
 	"github.com/DataDog/datadog-agent/pkg/trace/osutil"
 	httputils "github.com/DataDog/datadog-agent/pkg/util/http"
-	"github.com/DataDog/datadog-agent/pkg/util/log"
 )
 
 // newSenders returns a list of senders based on the given agent configuration, using climit
@@ -226,11 +224,16 @@ func (s *sender) Push(p *payload) {
 func (s *sender) sendPayload(p *payload) {
 	req, err := p.httpRequest(s.cfg.url)
 	if err != nil {
-		log.Errorf("http.Request: %s", err)
+		fmt.Println("http.Request: %s", err)
 		return
 	}
+	fmt.Println("Created the request without error ")
+
 	start := time.Now()
 	err = s.do(req)
+
+	fmt.Println("Sent - ", err)
+
 	stats := &eventData{
 		bytes:    p.body.Len(),
 		count:    1,
@@ -293,7 +296,8 @@ func (s *sender) recordEvent(t eventType, data *eventData) {
 }
 
 // userAgent is the computed user agent we'll use when communicating with Datadog
-var userAgent = fmt.Sprintf("Datadog Trace Agent/%s/%s", info.Version, info.GitCommit)
+// var userAgent = fmt.Sprintf("Datadog Trace Agent/%s/%s", info.Version, info.GitCommit)
+var userAgent = fmt.Sprintf("Datadog Trace Agent/%s/%s", "7.26.0", "aac3dbbb9ae1b3520233ce56061d8d6f25b0fa61")
 
 // retriableError is an error returned by the server which may be retried at a later time.
 type retriableError struct{ err error }
@@ -307,10 +311,13 @@ const (
 )
 
 func (s *sender) do(req *http.Request) error {
+	fmt.Println(headerAPIKey, " = ", s.cfg.apiKey)
+	fmt.Println(headerUserAgent, " = ", userAgent)
 	req.Header.Set(headerAPIKey, s.cfg.apiKey)
 	req.Header.Set(headerUserAgent, userAgent)
 	resp, err := s.cfg.client.Do(req)
 	if err != nil {
+		fmt.Println("Error: ", err)
 		// request errors include timeouts or name resolution errors and
 		// should thus be retried.
 		return &retriableError{err}
@@ -320,6 +327,8 @@ func (s *sender) do(req *http.Request) error {
 	// TCP connections if the Body is not read to completion and closed.
 	io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
+
+	fmt.Println("StatusCode: ", resp.StatusCode)
 
 	if resp.StatusCode/100 == 5 {
 		// 5xx errors can be retried
@@ -372,12 +381,14 @@ func (p *payload) clone() *payload {
 
 // httpRequest returns an HTTP request based on the payload, targeting the given URL.
 func (p *payload) httpRequest(url *url.URL) (*http.Request, error) {
+	fmt.Println("Sending to ", url.String())
 	req, err := http.NewRequest(http.MethodPost, url.String(), bytes.NewReader(p.body.Bytes()))
 	if err != nil {
 		// this should never happen with sanitized data (invalid method or invalid url)
 		return nil, err
 	}
 	for k, v := range p.headers {
+		fmt.Println("Header: ", k, " = ", v)
 		req.Header.Add(k, v)
 	}
 	req.Header.Add("Content-Length", strconv.Itoa(p.body.Len()))
