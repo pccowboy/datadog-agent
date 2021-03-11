@@ -3,15 +3,7 @@ import os
 import subprocess
 from pprint import pprint
 
-from codeowners import CodeOwners
-
 from .common.gitlab import Gitlab
-
-# Get codeowners
-CODEOWNERS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".github", "CODEOWNERS")
-with open(CODEOWNERS_PATH, 'r') as f:
-    codeowners = f.read()
-OWNERS = CodeOwners(codeowners)
 
 
 def check_failed_status(project_name, pipeline_id):
@@ -53,26 +45,35 @@ def check_failed_status(project_name, pipeline_id):
 class Test:
     PACKAGE_PREFIX = "github.com/DataDog/datadog-agent/"
 
-    def __init__(self, name, package):
+    def __init__(self, owners, name, package):
         self.name = name
         self.package = self.__removeprefix(package)
-        self.owners = self.__get_owners(package)
+        self.owners = self.__get_owners(owners, package)
 
     def __removeprefix(self, package):
         return package[len(self.PACKAGE_PREFIX) :]
 
-    def __get_owners(self, package):
+    def __get_owners(self, OWNERS, package):
         owners = OWNERS.of(self.__removeprefix(package))
         return [name for (kind, name) in owners if kind == "TEAM"]
 
 
 def get_failed_tests(project_name, job):
     gitlab = Gitlab()
+
+    # Get codeowners
+    from codeowners import CodeOwners
+
+    CODEOWNERS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".github", "CODEOWNERS")
+    with open(CODEOWNERS_PATH, 'r') as f:
+        codeowners = f.read()
+    OWNERS = CodeOwners(codeowners)
+
     test_output = gitlab.artifact(project_name, job["id"])
     for line in test_output:
         json_test = json.loads(line)
         if 'Test' in json_test and json_test["Action"] == "fail":
-            yield Test(json_test['Test'], json_test['Package'])
+            yield Test(OWNERS, json_test['Test'], json_test['Package'])
 
 
 def prepare_global_failure_message(header, failed_jobs):
