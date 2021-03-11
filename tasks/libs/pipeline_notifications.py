@@ -29,6 +29,7 @@ def check_failed_status(project_name, pipeline_id):
         # Check the final job in the list: it contains the current status of the job
         final_status = {
             "name": job_name,
+            "id": jobs[-1]["id"],
             "stage": jobs[-1]["stage"],
             "status": jobs[-1]["status"],
             "allow_failure": jobs[-1]["allow_failure"],
