@@ -2,7 +2,7 @@
 include:
   - https://gitlab-templates.ddbuild.io/slack-notifier/v1/template.yml
   # - /.gitlab/maintenance_jobs.yml
-  # - /.gitlab/deps_build.yml
+  - /.gitlab/deps_build.yml
   - /.gitlab/deps_fetch.yml
   - /.gitlab/source_test.yml
   # - /.gitlab/binary_build.yml
@@ -49,7 +49,7 @@ workflow:
 
 stages:
   - test
-  # - deps_build
+  - deps_build
   - deps_fetch
   - source_test
   # - binary_build
