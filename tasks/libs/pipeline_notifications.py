@@ -72,10 +72,14 @@ def get_failed_tests(project_name, job):
 
     test_output = gitlab.artifact(project_name, job["id"])
     print(test_output)
+
     for line in test_output:
-        json_test = json.loads(line)
-        if 'Test' in json_test and json_test["Action"] == "fail":
-            yield Test(OWNERS, json_test['Test'], json_test['Package'])
+        try:
+            json_test = json.loads(line)
+            if 'Test' in json_test and json_test["Action"] == "fail":
+                yield Test(OWNERS, json_test['Test'], json_test['Package'])
+        except Exception as e:
+            print("WARN: parsing failed", e)
 
 
 def prepare_global_failure_message(header, failed_jobs):
@@ -100,7 +104,6 @@ Failed jobs:""".format(
                 url=job["url"], name=job["name"], stage=job["stage"], retries=len(job["retry_summary"]) - 1
             )
         if job["name"].startswith("tests_"):
-            pprint(job)
             for test in get_failed_tests("DataDog/datadog-agent", job):
                 message += "\n    - `{}` from package `{}`, owned by *{}*".format(test.name, test.package, test.owners)
 
