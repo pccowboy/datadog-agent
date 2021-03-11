@@ -21,6 +21,7 @@ import (
 func TestHistogramConf(t *testing.T) {
 	h := histogramPercentilesConfig{Percentiles: []string{"0.95", "0.96", "0.28", "0.57", "0.58"}}
 	assert.Equal(t, []int{95, 96, 28, 57, 58}, h.percentiles())
+	assert.False(t, true)
 }
 
 func TestHistogramConfError(t *testing.T) {

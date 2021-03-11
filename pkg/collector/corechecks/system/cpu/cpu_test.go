@@ -14,6 +14,7 @@ import (
 
 	"github.com/DataDog/datadog-agent/pkg/aggregator/mocksender"
 	"github.com/shirou/gopsutil/cpu"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -80,6 +81,8 @@ func TestCPUCheckLinux(t *testing.T) {
 	cpuInfo = CPUInfo
 	cpuCheck := new(Check)
 	cpuCheck.Configure(nil, nil, "test")
+
+	assert.ElementsMatch(t, []string{"a", "b"}, []string{"b", "c"})
 
 	m := mocksender.NewMockSender(cpuCheck.ID())
 	m.On(metrics.GaugeType.String(), "system.cpu.num_cores", 1.0, "", []string(nil)).Return().Times(1)
