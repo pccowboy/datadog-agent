@@ -71,7 +71,7 @@ def get_failed_tests(project_name, job):
     OWNERS = CodeOwners(codeowners)
 
     test_output = gitlab.artifact(project_name, job["id"])
-    for line in test_output:
+    for line in test_output.splitlines():
         try:
             json_test = json.loads(line)
             if "message" in json_test:
