@@ -1,8 +1,17 @@
+import json
 import os
 import subprocess
 from pprint import pprint
 
+from codeowners import CodeOwners
+
 from .common.gitlab import Gitlab
+
+# Get codeowners
+CODEOWNERS_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "..", ".github", "CODEOWNERS")
+with open(CODEOWNERS_PATH, 'r') as f:
+    codeowners = f.read()
+OWNERS = CodeOwners(codeowners)
 
 
 def check_failed_status(project_name, pipeline_id):
@@ -41,6 +50,31 @@ def check_failed_status(project_name, pipeline_id):
     return final_failed_jobs
 
 
+class Test:
+    PACKAGE_PREFIX = "github.com/DataDog/datadog-agent/"
+
+    def __init__(self, name, package):
+        self.name = name
+        self.package = self.__removeprefix(package)
+        self.owners = self.__get_owners(package)
+
+    def __removeprefix(self, package):
+        return package[len(self.PACKAGE_PREFIX) :]
+
+    def __get_owners(self, package):
+        owners = OWNERS.of(self.__removeprefix(package))
+        return [name for (kind, name) in owners if kind == "TEAM"]
+
+
+def get_failed_tests(project_name, job):
+    gitlab = Gitlab()
+    test_output = gitlab.artifact(project_name, job["id"])
+    for line in test_output:
+        json_test = json.loads(line)
+        if 'Test' in json_test and json_test["Action"] == "fail":
+            yield Test(json_test['Test'], json_test['Package'])
+
+
 def prepare_global_failure_message(header, failed_jobs):
     message = """{header} pipeline <{pipeline_url}|{pipeline_id}> for {commit_ref_name} failed.
 {commit_title} (<{commit_url}|{commit_short_sha}>) by {author}
@@ -62,6 +96,10 @@ Failed jobs:""".format(
             message += "\n - <{url}|{name}> (stage: {stage}, after {retries} retries)".format(
                 url=job["url"], name=job["name"], stage=job["stage"], retries=len(job["retry_summary"]) - 1
             )
+        if job["name"].startswith("tests_"):
+            pprint(job)
+            for test in get_failed_tests("DataDog/datadog-agent", job):
+                message += "\n    - `{}` from package `{}`, owned by *{}*".format(test.name, test.package, test.owners)
 
     return message
 

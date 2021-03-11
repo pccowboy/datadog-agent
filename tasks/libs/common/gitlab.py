@@ -97,6 +97,10 @@ class Gitlab(object):
         path = "/projects/{}/repository/commits/{}".format(quote(project_name, safe=""), commit_sha)
         return self.make_request(path, json=True)
 
+    def artifact(self, project_name, job_id):
+        path = "/projects/{}/jobs/{}/artifacts/test_output.json".format(project_name, job_id)
+        return self.make_request(path)
+
     def all_jobs(self, project_name, pipeline_id):
         """
         Gets all the jobs for a pipeline.
